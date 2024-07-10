@@ -56,15 +56,39 @@ class DataPoint
  private:
   double x_;
   double y_;
-  bool undefined_;
+  bool undefined_y_;
 
  public:
-  DataPoint() : undefined_(true) { }
-  DataPoint(double x, double y) : x_(x), y_(y), undefined_(false) { }
+  DataPoint() : undefined_y_(true) { }
+  DataPoint(double x, double y) : x_(x), y_(y), undefined_y_(false) { }
 
-  double x() const { ASSERT(!undefined_); return x_; }
-  double y() const { ASSERT(!undefined_); return y_; }
+  double x() const { return x_; }
+  double y() const { ASSERT(!undefined_y_); return y_; }
+
+  double& x() { return x_; }
+  double& y() { return y_; }
+
+  void update_min(double y);
+  void update_max(double y);
 };
+
+void DataPoint::update_min(double y)
+{
+  if (undefined_y_ || y < y_)
+  {
+    y_ = y;
+    undefined_y_ = false;
+  }
+}
+
+void DataPoint::update_max(double y)
+{
+  if (undefined_y_ || y > y_)
+  {
+    y_ = y;
+    undefined_y_ = false;
+  }
+}
 
 class Plot
 {
@@ -84,13 +108,37 @@ void Plot::add(DataPoint data_point)
   data_points_.push_back(data_point);
 }
 
+void draw_horizontal_line_at(double y, double xmin, double xmax)
+{
+  std::vector<double> x_line = {xmin, xmax};
+  std::vector<double> y_line(x_line.size(), y);
+
+  plt::plot(x_line, y_line, {{"color", "lightgray"}, {"linewidth", "0.5"}});
+}
+
+void draw_vertical_line_at(double x, double ymin, double ymax)
+{
+  std::vector<double> y_line = {ymin, ymax};
+  std::vector<double> x_line(y_line.size(), x);
+
+  plt::plot(x_line, y_line, {{"color", "lightgray"}, {"linewidth", "0.5"}});
+}
+
 void Plot::draw()
 {
-  // Sort the data by x coordinate.
-  std::sort(data_points_.begin(), data_points_.end(),
-      [](DataPoint const& lhs, DataPoint const& rhs) {
-        return lhs.x() < rhs.x();
-      });
+  if (!data_points_.empty())
+  {
+#if 0
+    // Sort the data by x coordinate.
+    std::sort(data_points_.begin(), data_points_.end(),
+        [](DataPoint const& lhs, DataPoint const& rhs) {
+          return lhs.x() < rhs.x();
+        });
+#endif
+
+    xy_min_.x() = data_points_[0].x();
+    xy_max_.x() = data_points_[data_points_.size() - 1].x();
+  }
 
   // Split the data into two vectors.
   std::vector<double> plot_x;
@@ -99,26 +147,26 @@ void Plot::draw()
   {
     plot_x.push_back(data_point.x());
     plot_y.push_back(data_point.y());
+
+    xy_min_.update_min(data_point.y());
+    xy_max_.update_max(data_point.y());
   }
 
+  double xmin = xy_min_.x();
+  double xmax = xy_max_.x();
+  double ymin = xy_min_.y();
+  double ymax = xy_max_.y();
+
+
+  for (double x = std::floor(xmin); x <= std::ceil(xmax); ++x)
+    draw_vertical_line_at(x, ymin, ymax);
+  for (double y = std::floor(ymin); y <= std::ceil(ymax); ++y)
+    draw_horizontal_line_at(y, xmin, xmax);
+
   // Show the plot.
-  plt::scatter(plot_x, plot_y);
+  plt::plot(plot_x, plot_y, {{"color", "green"}, {"linewidth", "0.5"}});
   plt::show();
 }
-
-/*
-Number const Nmax = 1000000;
-Number const ymax = 0.0;
-Number const xmax = std::log10(Nmax);
-
-void draw_horizontal_line_at(double y)
-{
-  std::vector<double> x_line = {ymax, xmax};
-  std::vector<double> y_line(x_line.size(), y);
-
-  plt::plot(x_line, y_line, {{"color", "lightgray"}, {"linewidth", "0.5"}});
-}
-*/
 
 int main()
 {
@@ -127,9 +175,19 @@ int main()
 
   Plot plot;
 
-  plot.add({3, 9});
-  plot.add({2, 4});
-  plot.add({4, 16});
+  double N = 5777;
+
+  for (double x = 48; x <= 58; x += 1)
+  {
+    double y = N / x;
+    double yr = 109.0 - (x - 53.0) * 2.0 + (x - 53.0) * (x - 53.0) * 0.055;
+
+    for (double dx = -0.5; dx <= 0.5; dx += 0.125)
+    {
+      y = N / (x + dx);
+      plot.add({x + dx, y - yr});
+    }
+  }
 
   plot.draw();
 }
